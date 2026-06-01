@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { COL, homeworkMonthCol } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
-import { normalizeDoc, hasHomework } from "../lib/homework";
+import { normalizeDoc, bulkDeleteDayHomework } from "../lib/homework";
 import HomeworkDayModal from "../components/calendar/HomeworkDayModal";
 import HomeworkBulkModal from "../components/calendar/HomeworkBulkModal";
+import HomeworkCopyModal from "../components/calendar/HomeworkCopyModal";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -21,12 +22,6 @@ function shiftMonth(yyyymm, delta) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// 상태 → 셀 배경
-const STATUS_CELL_BG = {
-  done: "bg-emerald-50",
-  partial: "bg-amber-50",
-  none: "bg-red-50",
-};
 const STATUS_ICON = { done: "✓", partial: "◐", none: "✕" };
 
 export default function CalendarPage() {
@@ -53,7 +48,13 @@ export default function CalendarPage() {
 
   // 모달 상태
   const [dayModalDate, setDayModalDate] = useState(null);   // 단발
-  const [bulkOpen, setBulkOpen] = useState(false);          // 일괄
+  const [bulkOpen, setBulkOpen] = useState(false);          // 일괄 등록
+  const [copyOpen, setCopyOpen] = useState(false);          // 복사
+
+  // 선택 모드 (다중 삭제)
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const openDayModal = (date) => {
     if (!studentId) return alert("먼저 학생을 선택하세요.");
@@ -66,9 +67,61 @@ export default function CalendarPage() {
     setBulkOpen(true);
   };
 
+  const openCopy = () => {
+    if (students.length < 2) return alert("학생이 최소 2명 이상 있어야 복사할 수 있습니다.");
+    setCopyOpen(true);
+  };
+
+  const enterSelectMode = () => {
+    if (!studentId) return alert("먼저 학생을 선택하세요.");
+    setSelectMode(true);
+    setSelected(new Set());
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+
+  const toggleSelect = (date) => {
+    if (!byDate.has(date)) return; // 숙제 없는 칸은 선택 불가
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
+  const selectAllInMonth = () => {
+    const allDates = Array.from(byDate.keys());
+    setSelected(new Set(allDates));
+  };
+
+  const deleteSelected = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`선택한 ${selected.size}일의 숙제를 삭제할까요?\n(되돌릴 수 없습니다)`)) return;
+    setDeleting(true);
+    try {
+      await bulkDeleteDayHomework(studentId, Array.from(selected));
+      alert(`✅ ${selected.size}일 삭제 완료`);
+      exitSelectMode();
+    } catch (e) {
+      alert("삭제 실패: " + e.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // 셀 클릭 핸들러 — 선택 모드 / 일반 모드 분기
+  const onCellClick = (date) => {
+    if (selectMode) toggleSelect(date);
+    else openDayModal(date);
+  };
+
   return (
-    <div className="space-y-3">
-      {/* 헤더: 학생 선택 + 월 네비 + 숙제등록 */}
+    <div className="space-y-3 pb-20">
+      {/* 헤더: 학생 선택 + 월 네비 + 액션 */}
       <div className="bg-white rounded-lg p-3 shadow-sm space-y-2">
         {students.length === 0 ? (
           <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
@@ -78,7 +131,11 @@ export default function CalendarPage() {
           <select
             className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white focus:outline-none focus:border-indigo-500"
             value={studentId}
-            onChange={(e) => setStudentId(e.target.value)}
+            onChange={(e) => {
+              setStudentId(e.target.value);
+              exitSelectMode();
+            }}
+            disabled={selectMode}
           >
             <option value="">— 학생 선택 —</option>
             {students.map((s) => {
@@ -113,18 +170,57 @@ export default function CalendarPage() {
           >
             오늘
           </button>
+        </div>
+
+        {/* 액션 줄: 등록 / 복사 / 선택삭제 */}
+        <div className="flex items-center gap-1">
           <button
             onClick={openBulk}
-            disabled={!studentId}
-            className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded font-bold"
+            disabled={!studentId || selectMode}
+            className="flex-1 px-2 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded font-bold"
           >
             + 숙제등록
           </button>
+          <button
+            onClick={openCopy}
+            disabled={selectMode || students.length < 2}
+            className="flex-1 px-2 py-1.5 text-xs bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 text-indigo-700 border border-indigo-200 rounded font-bold"
+          >
+            📋 복사
+          </button>
+          {selectMode ? (
+            <button
+              onClick={exitSelectMode}
+              className="flex-1 px-2 py-1.5 text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold"
+            >
+              ✕ 선택해제
+            </button>
+          ) : (
+            <button
+              onClick={enterSelectMode}
+              disabled={!studentId}
+              className="flex-1 px-2 py-1.5 text-xs bg-white hover:bg-red-50 disabled:bg-slate-100 disabled:text-slate-400 text-red-700 border border-red-200 rounded font-bold"
+            >
+              🗑 선택삭제
+            </button>
+          )}
         </div>
-        {studentId && cls && (
+
+        {studentId && cls && !selectMode && (
           <div className="text-[11px] text-slate-500">
             시간표: {(cls.schedule || []).sort((a,b)=>a-b).map((d) => DAYS[d]).join(" · ")}{" "}
             <span className="text-slate-400">— 일괄 등록 시 이 요일에 자동 적용</span>
+          </div>
+        )}
+        {selectMode && (
+          <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5 flex items-center justify-between gap-2">
+            <span>🗑 삭제 모드 — 숙제 있는 칸을 눌러 선택</span>
+            <button
+              onClick={selectAllInMonth}
+              className="text-[11px] text-indigo-600 hover:underline"
+            >
+              전체선택
+            </button>
           </div>
         )}
       </div>
@@ -156,18 +252,46 @@ export default function CalendarPage() {
                   key={i}
                   cell={c}
                   doc={byDate.get(c.date)}
-                  onClick={() => openDayModal(c.date)}
+                  onClick={() => onCellClick(c.date)}
+                  selectMode={selectMode}
+                  selected={selected.has(c.date)}
                 />
               )
             )}
           </div>
 
           {/* 안내 */}
-          <div className="bg-white rounded-lg p-2 shadow-sm text-center text-[11px] text-slate-500 leading-relaxed">
-            💡 빈 칸 / 숙제 칸을 눌러 직접 등록·수정 · 헤더의 <strong>+ 숙제등록</strong> 으로
-            시간표대로 일괄 등록
-          </div>
+          {!selectMode && (
+            <div className="bg-white rounded-lg p-2 shadow-sm text-center text-[11px] text-slate-500 leading-relaxed">
+              💡 빈 칸 / 숙제 칸을 눌러 직접 등록·수정 · <strong>+ 숙제등록</strong> 으로 일괄
+              · <strong>📋 복사</strong> 로 학생 간 복사 · <strong>🗑 선택삭제</strong> 로 여러개 삭제
+            </div>
+          )}
         </>
+      )}
+
+      {/* 선택삭제 하단 액션바 */}
+      {selectMode && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-lg p-3 z-40">
+          <div className="max-w-3xl mx-auto flex items-center gap-2">
+            <div className="flex-1 text-sm font-bold text-slate-700">
+              {selected.size === 0 ? "선택 없음" : `${selected.size}일 선택됨`}
+            </div>
+            <button
+              onClick={exitSelectMode}
+              className="px-3 py-2 text-sm bg-slate-100 hover:bg-slate-200 rounded font-bold"
+            >
+              취소
+            </button>
+            <button
+              onClick={deleteSelected}
+              disabled={selected.size === 0 || deleting}
+              className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded font-bold"
+            >
+              {deleting ? "삭제 중..." : `🗑 ${selected.size}일 삭제`}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 모달 */}
@@ -188,6 +312,15 @@ export default function CalendarPage() {
           classObj={cls}
           month={month}
           onClose={() => setBulkOpen(false)}
+        />
+      )}
+      {copyOpen && (
+        <HomeworkCopyModal
+          students={students}
+          classes={classes}
+          defaultStudentId={studentId}
+          defaultMonth={month}
+          onClose={() => setCopyOpen(false)}
         />
       )}
     </div>
@@ -230,13 +363,14 @@ function aggregateCellBg(statuses) {
   return "bg-white";
 }
 
-function DayCell({ cell, doc, onClick }) {
+function DayCell({ cell, doc, onClick, selectMode, selected }) {
   const cm = doc?.classMaterial;
   const hm = doc?.homeworkMaterial;
   const cmName = cm?.name?.trim();
   const hmName = hm?.name?.trim();
   const cmStatus = cm?.status;
   const hmStatus = hm?.status;
+  const hasAny = !!(cmName || hmName);
   const cellBg = aggregateCellBg([cmStatus, hmStatus]);
   const dayColor =
     cell.weekday === 0 ? "text-red-600" : cell.weekday === 6 ? "text-blue-600" : "text-slate-700";
@@ -244,17 +378,40 @@ function DayCell({ cell, doc, onClick }) {
   const chipClass = (status, kind) =>
     (status && STATUS_CHIP[status]) || KIND_DEFAULT_CHIP[kind];
 
+  // 선택 모드 + 숙제 없는 칸 → disabled 회색
+  const disabled = selectMode && !hasAny;
+  const baseHover = selectMode ? "" : "hover:bg-indigo-50";
+  const ringClass = selected
+    ? "ring-2 ring-red-500 ring-inset bg-red-50"
+    : cell.isToday
+    ? "ring-2 ring-indigo-500 ring-inset"
+    : "";
+
   return (
     <button
       onClick={onClick}
-      className={`${cellBg} min-h-[90px] p-1 text-left hover:bg-indigo-50 transition flex flex-col gap-0.5 ${
-        cell.isToday ? "ring-2 ring-indigo-500 ring-inset" : ""
+      disabled={disabled}
+      className={`${selected ? "bg-red-50" : cellBg} min-h-[90px] p-1 text-left transition flex flex-col gap-0.5 ${ringClass} ${baseHover} ${
+        disabled ? "opacity-50 cursor-not-allowed" : ""
       }`}
     >
-      <div className={`text-xs font-bold ${dayColor}`}>
-        {cell.day}
-        {cell.isToday && (
-          <span className="ml-1 text-[9px] bg-indigo-600 text-white px-1 rounded">오늘</span>
+      <div className="flex items-center justify-between">
+        <div className={`text-xs font-bold ${dayColor}`}>
+          {cell.day}
+          {cell.isToday && (
+            <span className="ml-1 text-[9px] bg-indigo-600 text-white px-1 rounded">오늘</span>
+          )}
+        </div>
+        {selectMode && hasAny && (
+          <span
+            className={`w-4 h-4 rounded border-2 flex items-center justify-center text-[10px] leading-none ${
+              selected
+                ? "bg-red-600 border-red-600 text-white"
+                : "bg-white border-slate-300"
+            }`}
+          >
+            {selected ? "✓" : ""}
+          </span>
         )}
       </div>
       <div className="space-y-0.5 flex-1">

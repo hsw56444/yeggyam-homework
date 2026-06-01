@@ -15,10 +15,27 @@ export const monthOf = (date) => date.slice(0, 7);
 // 결정적 doc ID — 같은 학생·같은 날짜는 1개 문서로 upsert
 export const dayKey = (studentId, date) => `${studentId}_${date}`;
 
+// 기본 이름 (사용자 입력 비어있을 때)
+export const DEFAULT_CLASS_NAME = "수업교재";
+export const DEFAULT_HOMEWORK_NAME = "숙제교재";
+
 // classMaterial/homeworkMaterial 이 의미있는지 (이름이 있어야 의미 있음)
 export const hasClass = (doc) => !!(doc?.classMaterial?.name && doc.classMaterial.name.trim());
 export const hasHomework = (doc) =>
   !!(doc?.homeworkMaterial?.name && doc.homeworkMaterial.name.trim());
+
+// material 정규화: name 비어도 memo/status 있으면 기본 이름 적용. 셋 다 비면 null.
+function materializeMaterial(mat, defaultName) {
+  const name = (mat?.name || "").trim();
+  const memo = (mat?.memo || "").trim();
+  const status = mat?.status || null;
+  if (!name && !memo && !status) return null;
+  return {
+    name: name || defaultName,
+    memo,
+    status,
+  };
+}
 
 // 레거시(items 배열) 데이터 → 새 포맷으로 읽기용 정규화
 //   - items[0] → classMaterial
@@ -51,10 +68,10 @@ export function normalizeDoc(d) {
 export async function saveDayHomework(studentId, date, classMaterial, homeworkMaterial) {
   const colRef = homeworkMonthCol(monthOf(date));
   const ref = doc(colRef, dayKey(studentId, date));
-  const cmName = (classMaterial?.name || "").trim();
-  const hmName = (homeworkMaterial?.name || "").trim();
+  const cm = materializeMaterial(classMaterial, DEFAULT_CLASS_NAME);
+  const hm = materializeMaterial(homeworkMaterial, DEFAULT_HOMEWORK_NAME);
   // 둘 다 비어있으면 doc 삭제
-  if (!cmName && !hmName) {
+  if (!cm && !hm) {
     try { await deleteDoc(ref); } catch (_) { /* 없어도 OK */ }
     return;
   }
@@ -63,20 +80,8 @@ export async function saveDayHomework(studentId, date, classMaterial, homeworkMa
     {
       studentId,
       date,
-      classMaterial: cmName
-        ? {
-            name: cmName,
-            memo: (classMaterial?.memo || "").trim(),
-            status: classMaterial?.status || null,
-          }
-        : null,
-      homeworkMaterial: hmName
-        ? {
-            name: hmName,
-            memo: (homeworkMaterial?.memo || "").trim(),
-            status: homeworkMaterial?.status || null,
-          }
-        : null,
+      classMaterial: cm,
+      homeworkMaterial: hm,
       updatedAt: serverTimestamp(),
     },
     { merge: true }
@@ -94,6 +99,11 @@ export async function bulkSaveDayHomework(studentId, dates, classMaterial, homew
 export async function deleteDayHomework(studentId, date) {
   const colRef = homeworkMonthCol(monthOf(date));
   try { await deleteDoc(doc(colRef, dayKey(studentId, date))); } catch (_) { /* 없어도 OK */ }
+}
+
+// 여러 날짜 일괄 삭제 (한 학생)
+export async function bulkDeleteDayHomework(studentId, dates) {
+  await Promise.all(dates.map((d) => deleteDayHomework(studentId, d)));
 }
 
 // 상태만 업데이트 (달력에서 상태 토글 시)
@@ -135,4 +145,61 @@ export function monthRange(yyyymm) {
     start: `${yyyymm}-01`,
     end: `${yyyymm}-${String(last).padStart(2, "0")}`,
   };
+}
+
+// 한 학생의 한 달치 숙제 fetch (복사용)
+//   → [{ date, classMaterial, homeworkMaterial }] (normalizeDoc 적용)
+export async function fetchStudentMonth(studentId, yyyymm) {
+  const colRef = homeworkMonthCol(yyyymm);
+  const snap = await getDocs(colRef);
+  const out = [];
+  snap.forEach((d) => {
+    const data = { id: d.id, ...d.data() };
+    if (data.studentId !== studentId) return;
+    const n = normalizeDoc(data);
+    if (!hasClass(n) && !hasHomework(n)) return;
+    out.push(n);
+  });
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+// 학생 간 월 단위 복사
+//   - srcMonth 의 srcStudentId 숙제 전체 → dstStudentIds 각각에게 dstMonth 같은 일자로 복사
+//   - 타겟 월에 해당 일자가 없으면 (예: 2월 30일) skip
+//   - 기존 doc 은 덮어쓰여짐 (saveDayHomework merge 동작)
+// returns { copied: 학생당 복사된 doc 수, skipped: 일자 없음 skip 수 }
+export async function copyHomeworkBetweenStudents({
+  srcStudentId,
+  srcMonth,
+  dstStudentIds,
+  dstMonth,
+}) {
+  const srcDocs = await fetchStudentMonth(srcStudentId, srcMonth);
+  if (srcDocs.length === 0) return { copied: 0, skipped: 0 };
+
+  // 타겟 월의 마지막 일자
+  const [dy, dm] = dstMonth.split("-").map(Number);
+  const dstLastDay = new Date(dy, dm, 0).getDate();
+
+  let copied = 0;
+  let skipped = 0;
+  const tasks = [];
+
+  for (const src of srcDocs) {
+    const day = parseInt(src.date.slice(8, 10), 10);
+    if (day > dstLastDay) {
+      skipped += dstStudentIds.length;
+      continue;
+    }
+    const newDate = `${dstMonth}-${String(day).padStart(2, "0")}`;
+    for (const dstStudentId of dstStudentIds) {
+      tasks.push(
+        saveDayHomework(dstStudentId, newDate, src.classMaterial, src.homeworkMaterial)
+      );
+      copied++;
+    }
+  }
+  await Promise.all(tasks);
+  return { copied, skipped };
 }

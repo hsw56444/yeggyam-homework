@@ -35,9 +35,12 @@ export default function HomeworkDayModal({
   const wd = new Date(date + "T00:00:00").getDay();
   const isEditing = !!initialDoc;
 
+  const cmHasAny = !!(cmName.trim() || cmMemo.trim() || cmStatus);
+  const hmHasAny = !!(hmName.trim() || hmMemo.trim() || hmStatus);
+
   const submit = async () => {
-    if (!cmName.trim() && !hmName.trim()) {
-      return alert("수업교재 또는 숙제교재 중 1개 이상 입력하세요.");
+    if (!cmHasAny && !hmHasAny) {
+      return alert("수업교재 또는 숙제교재 중 1개 이상 정보를 입력하세요.\n(이름·메모·상태 중 하나만 있어도 OK)");
     }
     setSaving(true);
     try {
@@ -106,7 +109,7 @@ export default function HomeworkDayModal({
             <input
               type="text"
               className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-2 focus:outline-none focus:border-indigo-500"
-              placeholder="교재 이름 (예: 개념원리 수학(상))"
+              placeholder="교재 이름 (비우면 '수업교재' 로 표시)"
               value={cmName}
               onChange={(e) => setCmName(e.target.value)}
             />
@@ -153,7 +156,7 @@ export default function HomeworkDayModal({
             <input
               type="text"
               className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-2 focus:outline-none focus:border-amber-500"
-              placeholder="교재 이름 (예: 워크북 1권)"
+              placeholder="교재 이름 (비우면 '숙제교재' 로 표시)"
               value={hmName}
               onChange={(e) => setHmName(e.target.value)}
             />
