@@ -1,5 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
-import { bulkSaveDayHomework, classDatesInRange, monthRange } from "../../lib/homework";
+import {
+  bulkSaveDayHomework,
+  classDatesInRange,
+  monthRange,
+  DEFAULT_CLASS_NAME,
+  DEFAULT_HOMEWORK_NAME,
+} from "../../lib/homework";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -13,14 +19,21 @@ const STATUS = {
 export default function HomeworkBulkModal({
   studentId, studentName, classObj, month, onClose, onAfterSave,
 }) {
-  const [cmName, setCmName] = useState("");
+  const [cmEnabled, setCmEnabled] = useState(false);
+  const [cmName, setCmName] = useState(DEFAULT_CLASS_NAME);
   const [cmMemo, setCmMemo] = useState("");
   const [cmStatus, setCmStatus] = useState(null);
-  const [hmName, setHmName] = useState("");
+
+  const [hmEnabled, setHmEnabled] = useState(false);
+  const [hmName, setHmName] = useState(DEFAULT_HOMEWORK_NAME);
   const [hmMemo, setHmMemo] = useState("");
   const [hmStatus, setHmStatus] = useState(null);
+
   const [excluded, setExcluded] = useState(new Set());
   const [saving, setSaving] = useState(false);
+
+  const touchCm = () => setCmEnabled(true);
+  const touchHm = () => setHmEnabled(true);
 
   // 학생의 반 시간표 × 선택된 월 → 후보 날짜
   const candidateDates = useMemo(() => {
@@ -45,12 +58,9 @@ export default function HomeworkBulkModal({
     setExcluded(next);
   };
 
-  const cmHasAny = !!(cmName.trim() || cmMemo.trim() || cmStatus);
-  const hmHasAny = !!(hmName.trim() || hmMemo.trim() || hmStatus);
-
   const submit = async () => {
-    if (!cmHasAny && !hmHasAny) {
-      return alert("수업교재 또는 숙제교재 중 1개 이상 정보를 입력하세요.\n(이름·메모·상태 중 하나만 있어도 OK)");
+    if (!cmEnabled && !hmEnabled) {
+      return alert("포함할 항목을 1개 이상 체크하세요.\n(수업교재 또는 숙제교재)");
     }
     if (targetDates.length === 0) {
       return alert("적용 날짜가 없습니다.");
@@ -63,8 +73,8 @@ export default function HomeworkBulkModal({
       await bulkSaveDayHomework(
         studentId,
         targetDates,
-        { name: cmName, memo: cmMemo, status: cmStatus },
-        { name: hmName, memo: hmMemo, status: hmStatus }
+        cmEnabled ? { name: cmName, memo: cmMemo, status: cmStatus } : null,
+        hmEnabled ? { name: hmName, memo: hmMemo, status: hmStatus } : null,
       );
       alert(`✅ ${targetDates.length}일에 저장 완료`);
       onAfterSave && onAfterSave();
@@ -145,82 +155,34 @@ export default function HomeworkBulkModal({
           </section>
 
           {/* 수업교재 */}
-          <section className="border border-indigo-200 bg-indigo-50/50 rounded-lg p-3">
-            <div className="text-xs font-bold text-indigo-700 mb-2">📘 수업교재</div>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-2 focus:outline-none focus:border-indigo-500"
-              placeholder="교재 이름 (비우면 '수업교재' 로 표시)"
-              value={cmName}
-              onChange={(e) => setCmName(e.target.value)}
-            />
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-3 focus:outline-none focus:border-indigo-500"
-              placeholder="간단한 메모"
-              value={cmMemo}
-              onChange={(e) => setCmMemo(e.target.value)}
-            />
-            <div className="text-[11px] text-slate-500 mb-1.5">초기 상태 (선택)</div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {["done", "partial", "none"].map((st) => {
-                const s = STATUS[st];
-                const active = cmStatus === st;
-                return (
-                  <button
-                    key={st}
-                    onClick={() => setCmStatus(active ? null : st)}
-                    className={`py-2 rounded text-xs font-bold border-2 transition ${
-                      active
-                        ? `${s.btn} text-white border-transparent`
-                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                    }`}
-                  >
-                    {s.icon} {s.label}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          <MaterialSection
+            kind="class"
+            enabled={cmEnabled}
+            onToggle={setCmEnabled}
+            name={cmName}
+            onNameChange={(v) => { setCmName(v); touchCm(); }}
+            memo={cmMemo}
+            onMemoChange={(v) => { setCmMemo(v); touchCm(); }}
+            status={cmStatus}
+            onStatusChange={(v) => { setCmStatus(v); if (v) touchCm(); }}
+          />
 
           {/* 숙제교재 */}
-          <section className="border border-amber-200 bg-amber-50/50 rounded-lg p-3">
-            <div className="text-xs font-bold text-amber-700 mb-2">📝 숙제교재</div>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-2 focus:outline-none focus:border-amber-500"
-              placeholder="교재 이름 (비우면 '숙제교재' 로 표시)"
-              value={hmName}
-              onChange={(e) => setHmName(e.target.value)}
-            />
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-3 focus:outline-none focus:border-amber-500"
-              placeholder="간단한 메모"
-              value={hmMemo}
-              onChange={(e) => setHmMemo(e.target.value)}
-            />
-            <div className="text-[11px] text-slate-500 mb-1.5">초기 상태 (선택)</div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {["done", "partial", "none"].map((st) => {
-                const s = STATUS[st];
-                const active = hmStatus === st;
-                return (
-                  <button
-                    key={st}
-                    onClick={() => setHmStatus(active ? null : st)}
-                    className={`py-2 rounded text-xs font-bold border-2 transition ${
-                      active
-                        ? `${s.btn} text-white border-transparent`
-                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                    }`}
-                  >
-                    {s.icon} {s.label}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          <MaterialSection
+            kind="homework"
+            enabled={hmEnabled}
+            onToggle={setHmEnabled}
+            name={hmName}
+            onNameChange={(v) => { setHmName(v); touchHm(); }}
+            memo={hmMemo}
+            onMemoChange={(v) => { setHmMemo(v); touchHm(); }}
+            status={hmStatus}
+            onStatusChange={(v) => { setHmStatus(v); if (v) touchHm(); }}
+          />
+
+          <div className="text-[11px] text-slate-500 text-center leading-relaxed">
+            💡 체크된 항목만 등록됩니다. 입력칸을 수정하거나 상태를 누르면 자동으로 체크됩니다.
+          </div>
         </div>
 
         <div className="px-4 py-3 border-t border-slate-200">
@@ -234,5 +196,86 @@ export default function HomeworkBulkModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// 수업교재/숙제교재 공용 섹션 (DayModal 과 동일 패턴, '초기 상태' 라벨)
+function MaterialSection({
+  kind, enabled, onToggle,
+  name, onNameChange,
+  memo, onMemoChange,
+  status, onStatusChange,
+}) {
+  const isClass = kind === "class";
+  const icon = isClass ? "📘" : "📝";
+  const label = isClass ? "수업교재" : "숙제교재";
+
+  const sectionCls = enabled
+    ? (isClass
+        ? "border-indigo-300 bg-indigo-50/60"
+        : "border-amber-300 bg-amber-50/60")
+    : "border-slate-200 bg-slate-50";
+  const titleCls = enabled
+    ? (isClass ? "text-indigo-700" : "text-amber-700")
+    : "text-slate-400";
+  const innerCls = enabled ? "" : "opacity-60";
+  const focusBorder = isClass
+    ? "focus:border-indigo-500"
+    : "focus:border-amber-500";
+
+  return (
+    <section className={`border rounded-lg p-3 transition-colors ${sectionCls}`}>
+      <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          className={`w-4 h-4 ${isClass ? "accent-indigo-600" : "accent-amber-600"}`}
+        />
+        <span className={`text-xs font-bold ${titleCls}`}>
+          {icon} {label}
+        </span>
+        <span className="text-[10px] text-slate-400">
+          {enabled ? "— 일괄 등록됨" : "— 미포함 (체크하거나 입력 시 포함)"}
+        </span>
+      </label>
+
+      <div className={innerCls}>
+        <input
+          type="text"
+          className={`w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-2 focus:outline-none ${focusBorder}`}
+          placeholder="교재 이름"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+        />
+        <input
+          type="text"
+          className={`w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-3 focus:outline-none ${focusBorder}`}
+          placeholder="간단한 메모 (선택)"
+          value={memo}
+          onChange={(e) => onMemoChange(e.target.value)}
+        />
+        <div className="text-[11px] text-slate-500 mb-1.5">초기 상태 (선택)</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {["done", "partial", "none"].map((st) => {
+            const s = STATUS[st];
+            const active = status === st;
+            return (
+              <button
+                key={st}
+                onClick={() => onStatusChange(active ? null : st)}
+                className={`py-2 rounded text-xs font-bold border-2 transition ${
+                  active
+                    ? `${s.btn} text-white border-transparent`
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                }`}
+              >
+                {s.icon} {s.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
