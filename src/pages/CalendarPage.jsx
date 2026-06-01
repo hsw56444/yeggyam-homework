@@ -209,13 +209,40 @@ function buildCalendarCells(yyyymm) {
   return cells;
 }
 
+// 상태별 칩 색상
+const STATUS_CHIP = {
+  done: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  partial: "bg-amber-100 text-amber-800 border-amber-300",
+  none: "bg-red-100 text-red-800 border-red-300",
+};
+// 상태 없을 때 기본 색상 (종류별)
+const KIND_DEFAULT_CHIP = {
+  class: "bg-indigo-100 text-indigo-800 border-indigo-300",
+  homework: "bg-amber-50 text-amber-700 border-amber-200",
+};
+
+function aggregateCellBg(statuses) {
+  const arr = statuses.filter(Boolean);
+  if (arr.length === 0) return "bg-white";
+  if (arr.every((s) => s === "done")) return "bg-emerald-50";
+  if (arr.includes("none")) return "bg-red-50";
+  if (arr.includes("partial")) return "bg-amber-50";
+  return "bg-white";
+}
+
 function DayCell({ cell, doc, onClick }) {
-  const cmName = doc?.classMaterial?.name?.trim();
-  const hmName = doc?.homeworkMaterial?.name?.trim();
-  const hmStatus = doc?.homeworkMaterial?.status;
-  const cellBg = hmStatus && STATUS_CELL_BG[hmStatus] ? STATUS_CELL_BG[hmStatus] : "bg-white";
+  const cm = doc?.classMaterial;
+  const hm = doc?.homeworkMaterial;
+  const cmName = cm?.name?.trim();
+  const hmName = hm?.name?.trim();
+  const cmStatus = cm?.status;
+  const hmStatus = hm?.status;
+  const cellBg = aggregateCellBg([cmStatus, hmStatus]);
   const dayColor =
     cell.weekday === 0 ? "text-red-600" : cell.weekday === 6 ? "text-blue-600" : "text-slate-700";
+
+  const chipClass = (status, kind) =>
+    (status && STATUS_CHIP[status]) || KIND_DEFAULT_CHIP[kind];
 
   return (
     <button
@@ -233,24 +260,16 @@ function DayCell({ cell, doc, onClick }) {
       <div className="space-y-0.5 flex-1">
         {cmName && (
           <div
-            className="text-[10px] px-1 py-0.5 rounded border truncate font-medium bg-indigo-100 text-indigo-800 border-indigo-300"
-            title={`수업: ${cmName}${doc.classMaterial.memo ? " — " + doc.classMaterial.memo : ""}`}
+            className={`text-[10px] px-1 py-0.5 rounded border truncate font-medium ${chipClass(cmStatus, "class")}`}
+            title={`수업: ${cmName}${cm.memo ? " — " + cm.memo : ""}`}
           >
-            📘 {cmName}
+            📘 {cmName} {cmStatus && STATUS_ICON[cmStatus]}
           </div>
         )}
         {hmName && (
           <div
-            className={`text-[10px] px-1 py-0.5 rounded border truncate font-medium ${
-              hmStatus === "done"
-                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                : hmStatus === "partial"
-                ? "bg-amber-100 text-amber-800 border-amber-300"
-                : hmStatus === "none"
-                ? "bg-red-100 text-red-800 border-red-300"
-                : "bg-amber-50 text-amber-700 border-amber-200"
-            }`}
-            title={`숙제: ${hmName}${doc.homeworkMaterial.memo ? " — " + doc.homeworkMaterial.memo : ""}`}
+            className={`text-[10px] px-1 py-0.5 rounded border truncate font-medium ${chipClass(hmStatus, "homework")}`}
+            title={`숙제: ${hmName}${hm.memo ? " — " + hm.memo : ""}`}
           >
             📝 {hmName} {hmStatus && STATUS_ICON[hmStatus]}
           </div>

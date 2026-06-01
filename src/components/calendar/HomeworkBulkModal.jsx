@@ -15,6 +15,7 @@ export default function HomeworkBulkModal({
 }) {
   const [cmName, setCmName] = useState("");
   const [cmMemo, setCmMemo] = useState("");
+  const [cmStatus, setCmStatus] = useState(null);
   const [hmName, setHmName] = useState("");
   const [hmMemo, setHmMemo] = useState("");
   const [hmStatus, setHmStatus] = useState(null);
@@ -59,7 +60,7 @@ export default function HomeworkBulkModal({
       await bulkSaveDayHomework(
         studentId,
         targetDates,
-        { name: cmName, memo: cmMemo },
+        { name: cmName, memo: cmMemo, status: cmStatus },
         { name: hmName, memo: hmMemo, status: hmStatus }
       );
       alert(`✅ ${targetDates.length}일에 저장 완료`);
@@ -152,11 +153,31 @@ export default function HomeworkBulkModal({
             />
             <input
               type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-3 focus:outline-none focus:border-indigo-500"
               placeholder="간단한 메모"
               value={cmMemo}
               onChange={(e) => setCmMemo(e.target.value)}
             />
+            <div className="text-[11px] text-slate-500 mb-1.5">초기 상태 (선택)</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {["done", "partial", "none"].map((st) => {
+                const s = STATUS[st];
+                const active = cmStatus === st;
+                return (
+                  <button
+                    key={st}
+                    onClick={() => setCmStatus(active ? null : st)}
+                    className={`py-2 rounded text-xs font-bold border-2 transition ${
+                      active
+                        ? `${s.btn} text-white border-transparent`
+                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                    }`}
+                  >
+                    {s.icon} {s.label}
+                  </button>
+                );
+              })}
+            </div>
           </section>
 
           {/* 숙제교재 */}

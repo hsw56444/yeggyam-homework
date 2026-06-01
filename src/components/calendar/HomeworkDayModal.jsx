@@ -17,6 +17,7 @@ export default function HomeworkDayModal({
 }) {
   const [cmName, setCmName] = useState(initialDoc?.classMaterial?.name || "");
   const [cmMemo, setCmMemo] = useState(initialDoc?.classMaterial?.memo || "");
+  const [cmStatus, setCmStatus] = useState(initialDoc?.classMaterial?.status || null);
   const [hmName, setHmName] = useState(initialDoc?.homeworkMaterial?.name || "");
   const [hmMemo, setHmMemo] = useState(initialDoc?.homeworkMaterial?.memo || "");
   const [hmStatus, setHmStatus] = useState(initialDoc?.homeworkMaterial?.status || null);
@@ -25,6 +26,7 @@ export default function HomeworkDayModal({
   useEffect(() => {
     setCmName(initialDoc?.classMaterial?.name || "");
     setCmMemo(initialDoc?.classMaterial?.memo || "");
+    setCmStatus(initialDoc?.classMaterial?.status || null);
     setHmName(initialDoc?.homeworkMaterial?.name || "");
     setHmMemo(initialDoc?.homeworkMaterial?.memo || "");
     setHmStatus(initialDoc?.homeworkMaterial?.status || null);
@@ -42,7 +44,7 @@ export default function HomeworkDayModal({
       await saveDayHomework(
         studentId,
         date,
-        { name: cmName, memo: cmMemo },
+        { name: cmName, memo: cmMemo, status: cmStatus },
         { name: hmName, memo: hmMemo, status: hmStatus }
       );
       onAfterSave && onAfterSave();
@@ -110,11 +112,39 @@ export default function HomeworkDayModal({
             />
             <input
               type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white mb-3 focus:outline-none focus:border-indigo-500"
               placeholder="간단한 메모 (예: 28~35쪽 진행)"
               value={cmMemo}
               onChange={(e) => setCmMemo(e.target.value)}
             />
+            <div className="text-[11px] text-slate-500 mb-1.5">완료 상태</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {["done", "partial", "none"].map((st) => {
+                const s = STATUS[st];
+                const active = cmStatus === st;
+                return (
+                  <button
+                    key={st}
+                    onClick={() => setCmStatus(active ? null : st)}
+                    className={`py-2 rounded text-xs font-bold border-2 transition ${
+                      active
+                        ? `${s.btn} text-white border-transparent`
+                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                    }`}
+                  >
+                    {s.icon} {s.label}
+                  </button>
+                );
+              })}
+            </div>
+            {cmStatus && (
+              <button
+                onClick={() => setCmStatus(null)}
+                className="w-full mt-1.5 py-1 text-[11px] text-slate-400 hover:text-slate-600"
+              >
+                상태 지우기
+              </button>
+            )}
           </section>
 
           {/* 숙제교재 */}

@@ -2,9 +2,10 @@
 // 데이터 모델:
 //   hw_homework/{YYYY-MM}/items/{studentId}_{YYYY-MM-DD} {
 //     studentId, date,
-//     classMaterial:    { name, memo }           // 수업교재 (이름/메모)
+//     classMaterial:    { name, memo, status }   // 수업교재 (+ 상태)
 //     homeworkMaterial: { name, memo, status }   // 숙제교재 (+ 상태)
 //   }
+//   status: 'done' | 'partial' | 'none' | null
 import { homeworkMonthCol } from "../firebase";
 import { setDoc, doc, getDocs, deleteDoc, serverTimestamp } from "firebase/firestore";
 
@@ -29,7 +30,11 @@ export function normalizeDoc(d) {
   return {
     ...d,
     classMaterial: items[0]
-      ? { name: items[0].textbookName || "", memo: items[0].detail || "" }
+      ? {
+          name: items[0].textbookName || "",
+          memo: items[0].detail || "",
+          status: items[0].status || null,
+        }
       : null,
     homeworkMaterial: items[1]
       ? {
@@ -59,7 +64,11 @@ export async function saveDayHomework(studentId, date, classMaterial, homeworkMa
       studentId,
       date,
       classMaterial: cmName
-        ? { name: cmName, memo: (classMaterial?.memo || "").trim() }
+        ? {
+            name: cmName,
+            memo: (classMaterial?.memo || "").trim(),
+            status: classMaterial?.status || null,
+          }
         : null,
       homeworkMaterial: hmName
         ? {
