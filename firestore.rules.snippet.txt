@@ -1,0 +1,22 @@
+// === 예그얌 숙제관리 — Firestore 보안 규칙 (yeggyam-attendance 프로젝트에 추가) ===
+// 사용 방법:
+//   Firebase Console → yeggyam-attendance 프로젝트 → Firestore Database → 규칙 탭
+//   기존 출석앱 규칙은 그대로 두고, 아래 hw_* 매치 블록을 match /databases/{database}/documents { ... } 안에 추가
+//   ⚠️ 인증 없이 누구나 읽기/쓰기 가능 (교사 1인 사용 가정). URL 노출 주의.
+//   추후 PIN 또는 익명 Auth 추가 가능.
+
+match /databases/{database}/documents {
+
+  // === (기존 출석앱 규칙은 여기 위에 그대로 유지) ===
+
+  // 예그얌 숙제관리 — 누구나 R/W (URL 비공개로 보호)
+  match /hw_classes/{docId}      { allow read, write: if true; }
+  match /hw_students/{docId}     { allow read, write: if true; }
+  match /hw_textbooks/{docId}    { allow read, write: if true; }
+  match /hw_homework/{yyyymm} {
+    allow read, write: if true;
+    match /items/{hwId} {
+      allow read, write: if true;
+    }
+  }
+}
