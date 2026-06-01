@@ -2,11 +2,9 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useViewMode } from "../hooks/useViewMode";
 
 const navItems = [
-  { to: "/", label: "📅 달력", end: true },
-  { to: "/homework", label: "📝 숙제등록" },
+  { to: "/", label: "📅 달력 (숙제등록)", end: true },
   { to: "/students", label: "👥 학생" },
   { to: "/classes", label: "🏫 반·시간표" },
-  { to: "/textbooks", label: "📚 교재" },
 ];
 
 export default function Layout() {
