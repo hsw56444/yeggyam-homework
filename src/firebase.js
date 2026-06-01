@@ -1,6 +1,6 @@
 // Firebase 초기화 — yeggyam-attendance 프로젝트 공유, hw_* 컬렉션으로 격리
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc } from "firebase/firestore";
+import { getFirestore, collection } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDMK-Ezh0ak2DbsLoaCxceMAiGXCX7aEdo",
@@ -14,12 +14,14 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-// 컬렉션 헬퍼 — 출석앱과 충돌 방지를 위해 hw_ prefix 사용
+// 정적 컬렉션 참조 — 모듈 1회 평가, useEffect 의존성으로 안전하게 사용 가능
 export const COL = {
-  classes: () => collection(db, "hw_classes"),
-  students: () => collection(db, "hw_students"),
-  textbooks: () => collection(db, "hw_textbooks"),
-  // 월별 숙제: hw_homework/{YYYY-MM}/items/{hwId}
-  homeworkMonth: (yyyymm) => collection(db, "hw_homework", yyyymm, "items"),
-  homeworkMonthDoc: (yyyymm) => doc(db, "hw_homework", yyyymm),
+  classes: collection(db, "hw_classes"),
+  students: collection(db, "hw_students"),
+  textbooks: collection(db, "hw_textbooks"),
 };
+
+// 월별 동적 컬렉션
+export function homeworkMonthCol(yyyymm) {
+  return collection(db, "hw_homework", yyyymm, "items");
+}
