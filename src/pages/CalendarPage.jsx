@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { COL, homeworkMonthCol } from "../firebase";
 import { useCollection } from "../hooks/useCollection";
 import { normalizeDoc, bulkDeleteDayHomework } from "../lib/homework";
@@ -28,6 +28,7 @@ export default function CalendarPage() {
   const [students] = useCollection(COL.students, "name");
   const [classes] = useCollection(COL.classes, "name");
   const [studentId, setStudentId] = useState("");
+  const [pickerClassId, setPickerClassId] = useState("");
   const [month, setMonth] = useState(thisMonth());
   const monthColRef = useMemo(() => homeworkMonthCol(month), [month]);
   const [rawDocs] = useCollection(monthColRef);
@@ -45,6 +46,33 @@ export default function CalendarPage() {
   }, [rawDocs, studentId]);
 
   const cells = useMemo(() => buildCalendarCells(month), [month]);
+
+  // 반 가나다 정렬
+  const sortedClasses = useMemo(
+    () => [...classes].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko")),
+    [classes]
+  );
+
+  // 선택된 반의 학생만, 가나다 정렬
+  const studentsOfPickedClass = useMemo(() => {
+    if (!pickerClassId) return [];
+    return students
+      .filter((s) => s.classId === pickerClassId)
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+  }, [students, pickerClassId]);
+
+  // 최초 진입 시 picker 반 자동선택 (현재 학생의 반 → 첫 반)
+  useEffect(() => {
+    if (pickerClassId || sortedClasses.length === 0) return;
+    if (studentId) {
+      const s = students.find((x) => x.id === studentId);
+      if (s?.classId && sortedClasses.some((c) => c.id === s.classId)) {
+        setPickerClassId(s.classId);
+        return;
+      }
+    }
+    setPickerClassId(sortedClasses[0].id);
+  }, [sortedClasses, students, studentId, pickerClassId]);
 
   // 모달 상태
   const [dayModalDate, setDayModalDate] = useState(null);   // 단발
@@ -127,26 +155,69 @@ export default function CalendarPage() {
           <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
             ⚠️ 학생이 없습니다. 먼저 <strong>👥 학생</strong> 페이지에서 추가하세요.
           </div>
+        ) : sortedClasses.length === 0 ? (
+          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            ⚠️ 반이 없습니다. 먼저 <strong>🏫 반</strong> 페이지에서 추가하세요.
+          </div>
         ) : (
-          <select
-            className="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white focus:outline-none focus:border-indigo-500"
-            value={studentId}
-            onChange={(e) => {
-              setStudentId(e.target.value);
-              exitSelectMode();
-            }}
-            disabled={selectMode}
-          >
-            <option value="">— 학생 선택 —</option>
-            {students.map((s) => {
-              const c = classes.find((x) => x.id === s.classId);
-              return (
-                <option key={s.id} value={s.id}>
-                  {s.name} {c ? `(${c.name})` : ""}
-                </option>
-              );
-            })}
-          </select>
+          <div className="grid grid-cols-2 gap-2">
+            {/* 반 컬럼 */}
+            <div className="bg-slate-50 rounded border border-slate-200 p-1.5 max-h-44 overflow-y-auto">
+              <div className="text-[10px] font-bold text-slate-500 mb-1 px-1">반</div>
+              <div className="space-y-1">
+                {sortedClasses.map((c) => {
+                  const active = pickerClassId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setPickerClassId(c.id)}
+                      disabled={selectMode}
+                      className={`w-full text-left px-2 py-1.5 rounded text-sm transition ${
+                        active
+                          ? "bg-indigo-600 text-white font-bold"
+                          : "bg-white hover:bg-indigo-50 text-slate-700"
+                      } disabled:opacity-50`}
+                    >
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 학생 컬럼 */}
+            <div className="bg-slate-50 rounded border border-slate-200 p-1.5 max-h-44 overflow-y-auto">
+              <div className="text-[10px] font-bold text-slate-500 mb-1 px-1">학생</div>
+              {studentsOfPickedClass.length === 0 ? (
+                <div className="text-xs text-slate-400 px-2 py-4 text-center">
+                  학생 없음
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {studentsOfPickedClass.map((s) => {
+                    const active = studentId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          setStudentId(s.id);
+                          exitSelectMode();
+                        }}
+                        disabled={selectMode}
+                        className={`w-full text-left px-2 py-1.5 rounded text-sm transition ${
+                          active
+                            ? "bg-indigo-600 text-white font-bold"
+                            : "bg-white hover:bg-indigo-50 text-slate-700"
+                        } disabled:opacity-50`}
+                      >
+                        {s.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         )}
         <div className="flex items-center gap-1">
           <button
