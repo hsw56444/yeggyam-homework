@@ -10,6 +10,7 @@ export default function StudentsPage() {
   const [classes, loadingC] = useCollection(COL.classes, "name");
   const [form, setForm] = useState({ name: "", classId: "" });
   const [editingId, setEditingId] = useState(null);
+  const [filterClassId, setFilterClassId] = useState("all");
 
   // 기본 반 자동선택 — 폼 비어있고 반이 1개 이상이면 첫 반
   const effectiveClassId =
@@ -92,6 +93,17 @@ export default function StudentsPage() {
       ? "bg-blue-100 text-blue-700"
       : "bg-slate-100 text-slate-700";
 
+  // 필터 칩에 보이는 그룹 (반 + 미지정 + 전체)
+  const visibleGroups = useMemo(() => {
+    if (filterClassId === "all") return groups.filter((g) => g.list.length > 0);
+    return groups.filter(
+      (g) => g.list.length > 0 && g.cls.id === filterClassId
+    );
+  }, [groups, filterClassId]);
+
+  const orphanCount =
+    groups.find((g) => g.orphan)?.list.length ?? 0;
+
   return (
     <div className="space-y-3">
       <div className="bg-white rounded-lg p-4 shadow-sm">
@@ -146,17 +158,50 @@ export default function StudentsPage() {
         <h2 className="text-base font-bold mb-3">
           등록된 학생 <span className="text-slate-400 font-normal">({students.length})</span>
         </h2>
+
+        {/* 반 필터 칩 */}
+        {!loadingS && !loadingC && students.length > 0 && (
+          <div className="flex gap-2 mb-3 overflow-x-auto pb-1 -mx-1 px-1">
+            <FilterChip
+              active={filterClassId === "all"}
+              onClick={() => setFilterClassId("all")}
+              label={`전체 (${students.length})`}
+            />
+            {classes.map((c) => {
+              const count =
+                groups.find((g) => g.cls.id === c.id)?.list.length ?? 0;
+              return (
+                <FilterChip
+                  key={c.id}
+                  active={filterClassId === c.id}
+                  onClick={() => setFilterClassId(c.id)}
+                  label={`${c.name} (${count})`}
+                />
+              );
+            })}
+            {orphanCount > 0 && (
+              <FilterChip
+                active={filterClassId === "_none"}
+                onClick={() => setFilterClassId("_none")}
+                label={`미배정 (${orphanCount})`}
+              />
+            )}
+          </div>
+        )}
+
         {loadingS || loadingC ? (
           <div className="text-sm text-slate-400 py-6 text-center">불러오는 중...</div>
         ) : students.length === 0 ? (
           <div className="text-sm text-slate-400 py-6 text-center">
             등록된 학생이 없습니다.
           </div>
+        ) : visibleGroups.length === 0 ? (
+          <div className="text-sm text-slate-400 py-6 text-center">
+            해당 반에 학생이 없습니다.
+          </div>
         ) : (
           <div className="space-y-4">
-            {groups
-              .filter((g) => g.list.length > 0)
-              .map((g) => (
+            {visibleGroups.map((g) => (
                 <div key={g.cls.id}>
                   <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-slate-200">
                     <strong className="text-sm text-slate-700">
@@ -207,5 +252,20 @@ export default function StudentsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function FilterChip({ active, onClick, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition ${
+        active
+          ? "bg-indigo-600 border-indigo-600 text-white"
+          : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
