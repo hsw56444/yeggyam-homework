@@ -7,7 +7,7 @@
 //   }
 //   status: 'done' | 'partial' | 'none' | null
 import { homeworkMonthCol } from "../firebase";
-import { setDoc, doc, getDocs, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { setDoc, doc, getDoc, getDocs, deleteDoc, serverTimestamp } from "firebase/firestore";
 
 // 'YYYY-MM-DD' → 'YYYY-MM'
 export const monthOf = (date) => date.slice(0, 7);
@@ -145,6 +145,17 @@ export function monthRange(yyyymm) {
     start: `${yyyymm}-01`,
     end: `${yyyymm}-${String(last).padStart(2, "0")}`,
   };
+}
+
+// 한 학생·한 날짜 doc 1개 fetch (단발 복사·불러오기용)
+//   → normalizeDoc 적용, 의미있는 데이터 없으면 null
+export async function fetchDayHomework(studentId, date) {
+  const colRef = homeworkMonthCol(monthOf(date));
+  const snap = await getDoc(doc(colRef, dayKey(studentId, date)));
+  if (!snap.exists()) return null;
+  const n = normalizeDoc({ id: snap.id, ...snap.data() });
+  if (!hasClass(n) && !hasHomework(n)) return null;
+  return n;
 }
 
 // 한 학생의 한 달치 숙제 fetch (복사용)

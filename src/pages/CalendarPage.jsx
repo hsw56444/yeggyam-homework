@@ -373,6 +373,8 @@ export default function CalendarPage() {
           className={cls?.name}
           date={dayModalDate}
           initialDoc={byDate.get(dayModalDate) || null}
+          students={students}
+          classes={classes}
           onClose={() => setDayModalDate(null)}
         />
       )}

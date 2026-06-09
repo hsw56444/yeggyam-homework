@@ -5,6 +5,7 @@ import {
   DEFAULT_CLASS_NAME,
   DEFAULT_HOMEWORK_NAME,
 } from "../../lib/homework";
+import HomeworkDayShareModal from "./HomeworkDayShareModal";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -16,9 +17,11 @@ const STATUS = {
 
 // props:
 //   studentId, studentName, className, date, initialDoc, onClose, onAfterSave
+//   students, classes (선택사항 — 있으면 "다른 학생과 공유" 버튼 활성)
 export default function HomeworkDayModal({
   studentId, studentName, className,
   date, initialDoc, onClose, onAfterSave,
+  students, classes,
 }) {
   // 체크박스 — 기본 OFF. 수정 모드(initialDoc)에서 해당 섹션이 있으면 ON.
   const [cmEnabled, setCmEnabled] = useState(!!initialDoc?.classMaterial);
@@ -32,6 +35,33 @@ export default function HomeworkDayModal({
   const [hmStatus, setHmStatus] = useState(initialDoc?.homeworkMaterial?.status || null);
 
   const [saving, setSaving] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  const canShare = Array.isArray(students) && students.length >= 2;
+
+  // 불러오기에서 받은 material 로 폼 채우기 (자동 ON)
+  const applyImported = (cm, hm) => {
+    if (cm) {
+      setCmEnabled(true);
+      setCmName(cm.name || DEFAULT_CLASS_NAME);
+      setCmMemo(cm.memo || "");
+      setCmStatus(cm.status || null);
+    } else {
+      setCmEnabled(false);
+    }
+    if (hm) {
+      setHmEnabled(true);
+      setHmName(hm.name || DEFAULT_HOMEWORK_NAME);
+      setHmMemo(hm.memo || "");
+      setHmStatus(hm.status || null);
+    } else {
+      setHmEnabled(false);
+    }
+  };
+
+  // 현재 폼 → 보내기용 material 객체 (체크 OFF면 null)
+  const currentCmForSend = cmEnabled ? { name: cmName, memo: cmMemo, status: cmStatus } : null;
+  const currentHmForSend = hmEnabled ? { name: hmName, memo: hmMemo, status: hmStatus } : null;
 
   useEffect(() => {
     setCmEnabled(!!initialDoc?.classMaterial);
@@ -110,9 +140,20 @@ export default function HomeworkDayModal({
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="text-2xl text-slate-400 hover:text-slate-600 leading-none">
-            ×
-          </button>
+          <div className="flex items-center gap-1">
+            {canShare && (
+              <button
+                onClick={() => setShareOpen(true)}
+                className="px-2 py-1 text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-bold whitespace-nowrap"
+                title="다른 학생의 숙제를 불러오거나, 이 폼을 다른 학생에게 보냅니다"
+              >
+                📋 공유
+              </button>
+            )}
+            <button onClick={onClose} className="text-2xl text-slate-400 hover:text-slate-600 leading-none">
+              ×
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto p-4 space-y-4 flex-1">
@@ -169,6 +210,21 @@ export default function HomeworkDayModal({
           )}
         </div>
       </div>
+
+      {shareOpen && canShare && (
+        <HomeworkDayShareModal
+          students={students}
+          classes={classes || []}
+          currentStudentId={studentId}
+          currentStudentName={studentName}
+          currentDate={date}
+          currentCm={currentCmForSend}
+          currentHm={currentHmForSend}
+          onImport={applyImported}
+          onAfterSend={() => onAfterSave && onAfterSave()}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </div>
   );
 }
